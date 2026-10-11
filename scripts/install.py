@@ -137,6 +137,21 @@ def refresh_services() -> None:
         subprocess.run([str(tool), "-update"], check=False, capture_output=True)
 
 
+def install_progress(runtime: Path) -> None:
+    contents = runtime / "Progress.app" / "Contents"
+    binary = contents / "MacOS" / "PDFCompressorProgress"
+    binary.parent.mkdir(parents=True, exist_ok=True)
+    source = REPO / "src" / "pdfcompressor" / "native" / "Progress.m"
+    subprocess.run(["/usr/bin/clang", "-O2", "-fobjc-arc", "-fblocks", "-framework", "Cocoa",
+                    str(source), "-o", str(binary.with_suffix(".new"))], check=True)
+    os.replace(binary.with_suffix(".new"), binary)
+    info = {"CFBundleIdentifier": "io.github.pdfcompressor.progress",
+            "CFBundleName": "PDFCompressorProgress", "CFBundleExecutable": binary.name,
+            "CFBundlePackageType": "APPL", "LSUIElement": True,
+            "NSHighResolutionCapable": True, "CFBundleVersion": "1"}
+    (contents / "Info.plist").write_bytes(plistlib.dumps(info))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--home", type=Path, default=Path.home(), help="工作流目标用户目录")
@@ -156,6 +171,7 @@ def main() -> int:
         if not python.exists():
             subprocess.run([uv, "venv", "--python", "3.12", str(runtime / "venv")], check=True)
         subprocess.run([uv, "pip", "install", "--python", str(python), str(REPO)], check=True)
+        install_progress(runtime)
     for output in install_workflows(home, python.absolute()):
         print(output)
     if home == Path.home() and sys.platform == "darwin":

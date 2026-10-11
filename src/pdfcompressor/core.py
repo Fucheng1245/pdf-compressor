@@ -9,6 +9,7 @@ import tempfile
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
+from typing import Callable
 
 from PIL import Image
 from pypdf import PdfReader, PdfWriter
@@ -200,12 +201,15 @@ def _native_image(obj: DictionaryObject):
     return image
 
 
-def _compress_images(writer: PdfWriter, preset: Preset) -> tuple[int, int]:
+def _compress_images(writer: PdfWriter, preset: Preset, progress=None) -> tuple[int, int]:
     if preset.max_edge is None:
         return 0, 0
     seen: set[int] = set()
     count = skipped = 0
-    for page in writer.pages:
+    total_pages = len(writer.pages)
+    for page_index, page in enumerate(writer.pages):
+        if progress:
+            progress("images", page_index, total_pages)
         # A damaged/unsupported image may fail when pypdf enumerates it. Leave
         # that resource untouched; do not risk changing the document to fix it.
         try:
@@ -276,6 +280,8 @@ def _compress_images(writer: PdfWriter, preset: Preset) -> tuple[int, int]:
                 count += 1
             except Exception:
                 skipped += 1
+    if progress:
+        progress("images", total_pages, total_pages)
     return count, skipped
 
 
@@ -300,7 +306,8 @@ def _publish(temp: Path, source: Path, preset: str) -> Path:
         return output
 
 
-def compress(source: str | Path, preset: str = "high") -> Result:
+def compress(source: str | Path, preset: str = "high", *,
+             progress: Callable[[str, int, int], None] | None = None) -> Result:
     if preset not in PRESETS:
         raise ValueError(f"Unknown preset: {preset}")
     source = Path(source).expanduser().absolute()
@@ -308,6 +315,8 @@ def compress(source: str | Path, preset: str = "high") -> Result:
         raise CompressionError("请选择现有的 PDF 文件。")
     temporary: Path | None = None
     try:
+        if progress:
+            progress("reading", 0, 0)
         reader = PdfReader(source)
         if reader.is_encrypted:
             raise CompressionError("暂不处理加密 PDF，请先保存未加密副本。")
@@ -317,13 +326,21 @@ def compress(source: str | Path, preset: str = "high") -> Result:
         if not len(reader.pages):
             raise CompressionError("PDF 没有页面。")
         before = source.stat().st_size
+        if progress:
+            progress("cloning", 0, 0)
         writer = PdfWriter(clone_from=reader)
-        changed, skipped = _compress_images(writer, PRESETS[preset])
+        changed, skipped = _compress_images(writer, PRESETS[preset], progress)
+        if progress:
+            progress("cleaning", 0, 0)
         _clean_private_data(writer)
         fd, path = tempfile.mkstemp(prefix=".pdfcompress-", suffix=".tmp", dir=source.parent)
         os.close(fd)
         temporary = Path(path)
+        if progress:
+            progress("writing", 0, 0)
         writer.write(temporary)
+        if progress:
+            progress("validating", 0, 0)
         check = PdfReader(temporary)
         if len(check.pages) != len(reader.pages):
             raise CompressionError("输出页面校验失败，未保存副本。")
@@ -334,6 +351,8 @@ def compress(source: str | Path, preset: str = "high") -> Result:
         after = temporary.stat().st_size
         output = _publish(temporary, source, preset)
         temporary = None
+        if progress:
+            progress("finished", 0, 0)
         return Result(source, output, preset, before, after, len(reader.pages), changed, skipped)
     except CompressionError:
         raise

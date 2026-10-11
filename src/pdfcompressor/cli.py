@@ -10,6 +10,7 @@ import subprocess
 import sys
 
 from .core import PRESETS, compress
+from .progress import ProgressPanel
 
 
 def _notify_error(message: str) -> None:
@@ -34,22 +35,29 @@ def _finder_logger() -> tuple[logging.Logger, Path]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="本地 PDF 三档压缩，保留原件。")
     parser.add_argument("--preset", choices=PRESETS, default="high")
-    parser.add_argument("--finder", action="store_true", help="静默成功、记录日志、仅失败时通知")
+    parser.add_argument("--finder", action="store_true", help="显示处理进度、完成自动关闭、仅失败时通知")
     parser.add_argument("files", nargs="+")
     args = parser.parse_args(argv)
     logger = None
     lock = None
+    panel = None
     if args.finder:
         import fcntl
         logger, log_dir = _finder_logger()
         lock = open(log_dir / "worker.lock", "a")
         os.chmod(log_dir / "worker.lock", 0o600)
-        fcntl.flock(lock, fcntl.LOCK_EX)
+        panel = ProgressPanel(PRESETS[args.preset].label, len(args.files))
+        panel.select_file(args.files[0], 1)
+        panel.update("waiting")
     failures = []
     try:
-        for file in args.files:
+        if lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+        for index, file in enumerate(args.files, 1):
+            if panel:
+                panel.select_file(file, index)
             try:
-                result = compress(file, args.preset)
+                result = compress(file, args.preset, progress=panel.update if panel else None)
                 record = result.as_dict()
                 if logger:
                     logger.info(json.dumps(record, ensure_ascii=False))
@@ -64,6 +72,8 @@ def main(argv: list[str] | None = None) -> int:
         if failures and args.finder:
             _notify_error(f"{len(failures)} 个文件未完成。{failures[0][:180]}")
     finally:
+        if panel:
+            panel.close()
         if lock:
             lock.close()
     return 1 if failures else 0

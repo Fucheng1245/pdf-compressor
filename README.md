@@ -2,7 +2,7 @@
 
 当前为 v0.1.0。压缩核心及三个 Finder 右键入口均已在 macOS 14.6 实际点击验证，详见 [验证记录](docs/VERIFICATION.md)。性能优化后，本机这份 48 页 PDF 三档分别约需 2 / 8 / 7 秒；具体取决于文件内容，见 [性能记录](docs/PERFORMANCE.md) 和 [第二轮方案对照](docs/OPTIMIZATION.md)。
 
-本地 PDF 三档压缩工具。选中 PDF 后，从 Finder 的 **快速操作** 中点击对应档位，在原文件夹生成副本。成功时不弹确认、不弹完成提示，不上传文件。
+本地 PDF 三档压缩工具。选中 PDF 后，从 Finder 的 **快速操作** 中点击对应档位，在原文件夹生成副本。处理时显示简洁进度窗，完成后自动关闭，不弹完成提示，不上传文件。
 
 | 快速操作 | 输出示例 | 策略 |
 | --- | --- | --- |
@@ -14,7 +14,7 @@ high / mid / low 表示保留的画质，不表示压缩力度。JPEG 参数不�
 
 ## macOS 安装
 
-需要 macOS 13+；本地实际验证环境为 macOS 14.6。先安装 [uv](https://docs.astral.sh/uv/getting-started/installation/)，然后在仓库根目录执行：
+需要 macOS 13+ 和 Apple Command Line Tools（用于安装时编译原生进度窗，运行时无需编译器）；本地实际验证环境为 macOS 14.6。先安装 [uv](https://docs.astral.sh/uv/getting-started/installation/)，然后在仓库根目录执行：
 
 ```bash
 uv run --python 3.12 --no-project python scripts/install.py
@@ -26,13 +26,14 @@ uv run --python 3.12 --no-project python scripts/install.py
 
 - `~/Library/Application Support/PDFCompressor/venv/`：隔离运行环境。
 - `~/Library/Services/PDF压缩 · <档位>.workflow`：三个右键入口。
+- `~/Library/Application Support/PDFCompressor/Progress.app/`：仅处理期间运行的原生进度窗。
 - `~/Library/Logs/PDFCompressor/compress.log`：本机轮转日志，包含路径、体积和错误，不记录正文。
 
 在 Finder 中右键 PDF → **快速操作 → PDF压缩 · 画质优先 / 均衡压缩 / 体积优先**。支持多选，逐个处理；多个调用排队，避免同时占满 CPU 和内存。
 
 > 第一版菜单是三个平铺的快速操作。系统公开接口没有提供“快速操作 → PDF压缩 → 三档”的任意嵌套菜单，因此这里不把设计示意当成已实现的系统功能。不使用 Finder 注入或后台常驻菜单扩展。
 
-安装器会在当前用户的 `pbs` 偏好中启用本工具的三个入口，使用原生布尔值和整数，保留其他服务设置；这套服务标识已在 macOS 14.6 验证，其他系统版本仍需验证。卸载时同步清理本工具的启用项。如果入口尚未出现，在系统设置搜索“扩展”或“服务”，启用对应 Finder 快速操作，再重新打开 Finder 窗口。系统可能请求访问选中文件所在文件夹的权限。失败时尝试发出系统通知；若通知被系统禁止，查看本机日志。成功没有通知，文件会直接出现在原文件夹中。
+安装器会在当前用户的 `pbs` 偏好中启用本工具的三个入口，使用原生布尔值和整数，保留其他服务设置；这套服务标识已在 macOS 14.6 验证，其他系统版本仍需验证。卸载时同步清理本工具的启用项。如果入口尚未出现，在系统设置搜索“扩展”或“服务”，启用对应 Finder 快速操作，再重新打开 Finder 窗口。系统可能请求访问选中文件所在文件夹的权限。失败时尝试发出系统通知；若通知被系统禁止，查看本机日志。处理中进度窗显示档位、文件名和当前阶段；图片阶段按处理页数显示进度，其他阶段使用等待动画，不显示估计百分比或剩余时间。多选时显示当前文件序号，排队时显示等待提示。结束后自动关闭，成功没有通知，文件直接出现在原文件夹中。
 
 卸载：
 
@@ -53,7 +54,7 @@ uv pip install --python .venv/bin/python '.[test]'
 .venv/bin/python -m pytest
 ```
 
-命令行输出 JSON：原路径、输出路径、档位、处理前后字节数、页数、图片处理数量；批次中有失败返回非零状态，其他文件继续处理。Finder 调用采用 `--finder` 模式，成功仅写本机日志。
+命令行输出 JSON：原路径、输出路径、档位、处理前后字节数、页数、图片处理数量；批次中有失败返回非零状态，其他文件继续处理。Finder 调用采用 `--finder` 模式，显示进度，成功记录本机日志。进度窗异常或缺失不影响压缩；命令行默认不弹窗。
 
 Python 接口：
 
@@ -81,3 +82,5 @@ print(result.output, result.before_bytes, result.after_bytes)
 这是独立仓库，不包含论文或个人 PDF、日志、运行环境和生成的输出。将仓库推送到自己的 GitHub remote 即可，安装器会从用户检出的本地代码构建安装包。当前不提供签名 DMG、自动更新或 Finder 扩展。
 
 许可证：MIT。
+
+API 可传入 `progress(stage, completed, total)` 回调；仅 `images` 阶段的页数进度可计量，其他阶段的 total 为 0。原有调用兼容。
