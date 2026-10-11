@@ -188,3 +188,34 @@ def test_unreachable_cycle_removed_without_decoding():
     assert writer._objects[a.idnum-1] is None
     assert writer._objects[b.idnum-1] is None
     assert len(writer.pages) == 1
+
+
+@pytest.mark.parametrize('mode', ['RGB', 'L'])
+@pytest.mark.parametrize('encoding', ['flate', 'jpeg'])
+def test_native_raw_and_jpeg_decode_pixels(mode, encoding):
+    import zlib
+    from pypdf.generic import EncodedStreamObject
+    from pdfcompressor.core import _native_image
+    original = Image.new(mode, (8, 6), (20, 120, 230) if mode == 'RGB' else 120)
+    stream = EncodedStreamObject()
+    if encoding == 'flate':
+        stream._data = zlib.compress(original.tobytes())
+        filter_name = '/FlateDecode'
+        expected = original
+    else:
+        buffer = BytesIO(); original.save(buffer, format='JPEG', quality=85, subsampling=0)
+        stream._data = buffer.getvalue()
+        filter_name = '/DCTDecode'
+        expected = Image.open(BytesIO(stream._data)); expected.load()
+    stream.update({NameObject('/Filter'): NameObject(filter_name),
+                   NameObject('/Width'): NumberObject(8), NameObject('/Height'): NumberObject(6),
+                   NameObject('/ColorSpace'): NameObject('/DeviceRGB' if mode == 'RGB' else '/DeviceGray'),
+                   NameObject('/BitsPerComponent'): NumberObject(8)})
+    actual = _native_image(stream)
+    assert actual.mode == expected.mode
+    assert actual.tobytes() == expected.tobytes()
+    stream[NameObject('/Decode')] = ArrayObject([NumberObject(1), NumberObject(0)])
+    assert _native_image(stream) is None
+    del stream[NameObject('/Decode')]
+    stream[NameObject('/ColorSpace')] = NameObject('/DeviceCMYK')
+    assert _native_image(stream) is None

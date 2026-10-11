@@ -157,8 +157,43 @@ def _native_png_image(obj: DictionaryObject):
     image = Image.open(BytesIO(png))
     image.load()
     if "/SMask" in obj:
-        mask = _native_png_image(obj["/SMask"])
+        mask = _native_image(obj["/SMask"])
         if mask is None or mask.mode != "L" or mask.size != image.size:
+            return None
+        image = image.convert("RGBA")
+        image.putalpha(mask)
+    return image
+
+
+def _native_image(obj: DictionaryObject):
+    """Avoid intermediate PNG/JPEG encoding for compatible image streams."""
+    if "/Decode" in obj or "/Mask" in obj:
+        return None
+    space = obj.get("/ColorSpace")
+    if space not in ("/DeviceRGB", "/DeviceGray") or obj.get("/BitsPerComponent") != 8:
+        return None
+    size = (int(obj["/Width"]), int(obj["/Height"]))
+    mode = "RGB" if space == "/DeviceRGB" else "L"
+    image = None
+    if obj.get("/Filter") == "/FlateDecode":
+        params = obj.get("/DecodeParms", {})
+        if isinstance(params, IndirectObject):
+            params = params.get_object()
+        if isinstance(params, (dict, DictionaryObject)) and params.get("/Predictor", 1) == 1:
+            data = zlib.decompress(obj._data)
+            if len(data) != size[0] * size[1] * (3 if mode == "RGB" else 1):
+                return None
+            image = Image.frombytes(mode, size, data)
+    elif obj.get("/Filter") == "/DCTDecode" and not obj.get("/DecodeParms"):
+        image = Image.open(BytesIO(obj._data))
+        image.load()
+        if image.mode != mode or image.size != size:
+            return None
+    if image is None:
+        return _native_png_image(obj)
+    if "/SMask" in obj:
+        mask = _native_image(obj["/SMask"])
+        if mask is None or mask.mode != "L" or mask.size != size:
             return None
         image = image.convert("RGBA")
         image.putalpha(mask)
@@ -197,7 +232,7 @@ def _compress_images(writer: PdfWriter, preset: Preset) -> tuple[int, int]:
                     skipped += 1
                     continue
                 try:
-                    original = _native_png_image(obj)
+                    original = _native_image(obj)
                 except Exception:
                     original = None
                 if original is None:
