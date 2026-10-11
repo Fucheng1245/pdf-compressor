@@ -145,3 +145,46 @@ def test_no_growth(tmp_path):
     src = tmp_path / 'tiny.pdf'; w=PdfWriter(); w.add_blank_page(100,100); w.write(src)
     result = compress(src)
     assert result.after_bytes <= result.before_bytes
+
+
+def test_native_png_prediction_and_transparency():
+    import zlib
+    from pypdf.generic import EncodedStreamObject
+    from pdfcompressor.core import _native_png_image
+
+    def image_stream(pixels, width, height, channels):
+        stream = EncodedStreamObject()
+        rows = b''.join(b'\x00' + pixels[y*width*channels:(y+1)*width*channels] for y in range(height))
+        stream._data = zlib.compress(rows)
+        stream.update({NameObject('/Filter'): NameObject('/FlateDecode'),
+                       NameObject('/Width'): NumberObject(width), NameObject('/Height'): NumberObject(height),
+                       NameObject('/BitsPerComponent'): NumberObject(8),
+                       NameObject('/ColorSpace'): NameObject('/DeviceRGB' if channels == 3 else '/DeviceGray'),
+                       NameObject('/DecodeParms'): DictionaryObject({NameObject('/Predictor'): NumberObject(15),
+                           NameObject('/Columns'): NumberObject(width), NameObject('/Colors'): NumberObject(channels)})})
+        return stream
+    rgb = bytes([20, 120, 240, 255, 0, 60] * 2)
+    alpha = bytes([0, 80, 180, 255])
+    obj = image_stream(rgb, 2, 2, 3)
+    obj[NameObject('/SMask')] = image_stream(alpha, 2, 2, 1)
+    actual = _native_png_image(obj)
+    expected = Image.frombytes('RGB', (2, 2), rgb).convert('RGBA')
+    expected.putalpha(Image.frombytes('L', (2, 2), alpha))
+    assert actual.tobytes() == expected.tobytes()
+    obj[NameObject('/Decode')] = ArrayObject([NumberObject(1), NumberObject(0)])
+    assert _native_png_image(obj) is None
+
+
+def test_unreachable_cycle_removed_without_decoding():
+    from pdfcompressor.core import _clean_private_data
+    writer = PdfWriter()
+    writer.add_blank_page(100, 100)
+    first = DictionaryObject()
+    second = DictionaryObject()
+    a, b = writer._add_object(first), writer._add_object(second)
+    first[NameObject('/Next')] = b
+    second[NameObject('/Next')] = a
+    _clean_private_data(writer)
+    assert writer._objects[a.idnum-1] is None
+    assert writer._objects[b.idnum-1] is None
+    assert len(writer.pages) == 1

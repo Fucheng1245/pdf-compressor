@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import shutil
+import struct
+import zlib
 import tempfile
 from dataclasses import dataclass
 from io import BytesIO
@@ -9,7 +12,8 @@ from pathlib import Path
 
 from PIL import Image
 from pypdf import PdfReader, PdfWriter
-from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject, NumberObject
+from pypdf.generic import (ArrayObject, DecodedStreamObject, DictionaryObject,
+                           IndirectObject, NameObject, NumberObject, StreamObject)
 
 
 @dataclass(frozen=True)
@@ -45,6 +49,65 @@ class Result:
         return {**self.__dict__, "source": str(self.source), "output": str(self.output)}
 
 
+def _remove_unreachable(writer: PdfWriter) -> None:
+    """Trace the live graph once, including cycles, without decoding streams."""
+    stack = [writer.root_object.indirect_reference, writer._info_obj, writer._ID]
+    live: set[int] = set()
+    direct_seen: set[int] = set()
+    while stack:
+        obj = stack.pop()
+        if isinstance(obj, IndirectObject):
+            if obj.pdf is not writer or obj.idnum in live:
+                continue
+            live.add(obj.idnum)
+            stack.append(obj.get_object())
+        elif isinstance(obj, (DictionaryObject, ArrayObject)):
+            if id(obj) in direct_seen:
+                continue
+            direct_seen.add(id(obj))
+            stack.extend(obj.values() if isinstance(obj, DictionaryObject) else obj)
+    for index in range(len(writer._objects)):
+        if index + 1 not in live:
+            writer._objects[index] = None
+
+
+def _merge_identical_encoded_objects(writer: PdfWriter) -> None:
+    # Compare encoded streams plus their full dictionaries. This is conservative
+    # (different encodings stay separate), but never decodes pixels just to hash.
+    hashes = {}
+    replacements = {}
+    protected = {writer.root_object.indirect_reference.idnum}
+    if isinstance(writer._info_obj, IndirectObject):
+        protected.add(writer._info_obj.idnum)
+    for index, obj in enumerate(writer._objects):
+        if obj is None or index + 1 in protected:
+            continue
+        digest = hashlib.sha256(type(obj).__name__.encode())
+        digest.update(DictionaryObject.hash_value_data(obj) if isinstance(obj, DictionaryObject)
+                      else obj.hash_value_data())
+        if isinstance(obj, StreamObject):
+            digest.update(obj._data)
+        key = digest.digest()
+        if key in hashes:
+            replacements[index + 1] = hashes[key]
+            writer._objects[index] = None
+        else:
+            hashes[key] = obj.indirect_reference
+    stack = [obj for obj in writer._objects if isinstance(obj, (DictionaryObject, ArrayObject))]
+    visited = set()
+    while stack:
+        obj = stack.pop()
+        if id(obj) in visited:
+            continue
+        visited.add(id(obj))
+        for key, value in (list(obj.items()) if isinstance(obj, DictionaryObject) else enumerate(obj)):
+            if isinstance(value, IndirectObject) and value.pdf is writer:
+                if value.idnum in replacements:
+                    obj[key] = replacements[value.idnum]
+            elif isinstance(value, (DictionaryObject, ArrayObject)):
+                stack.append(value)
+
+
 def _clean_private_data(writer: PdfWriter) -> None:
     # Illustrator editing payloads are not needed to render the PDF. Preserve
     # attachments, annotations, document metadata and every visible resource.
@@ -54,13 +117,14 @@ def _clean_private_data(writer: PdfWriter) -> None:
             for key in list(obj):
                 if str(key).startswith("/AIPDFPrivateData"):
                     del obj[key]
-    # pypdf's orphan removal is not transitive in one pass: private dictionaries
-    # can reference other dictionaries which in turn reference large streams.
+    # Drop unreachable editing payloads before deduplication hashes streams:
+    # hashing decodes them, which can be expensive for PNG prediction filters.
+    _remove_unreachable(writer)
     while True:
         before = sum(obj is not None for obj in writer._objects)
-        writer.compress_identical_objects(remove_duplicates=True, remove_unreferenced=True)
-        after = sum(obj is not None for obj in writer._objects)
-        if after == before:
+        _merge_identical_encoded_objects(writer)
+        _remove_unreachable(writer)
+        if sum(obj is not None for obj in writer._objects) == before:
             break
     for index, obj in enumerate(writer._objects):
         if hasattr(obj, "_data") and not obj.get("/Filter"):
@@ -68,6 +132,37 @@ def _clean_private_data(writer: PdfWriter) -> None:
             if len(compressed._data) < len(obj._data):
                 compressed.indirect_reference = obj.indirect_reference
                 writer._objects[index] = compressed
+
+
+def _native_png_image(obj: DictionaryObject):
+    """Decode compatible PNG-predicted streams in Pillow's native PNG codec."""
+    if obj.get("/Filter") != "/FlateDecode" or "/Decode" in obj or "/Mask" in obj:
+        return None
+    params = obj.get("/DecodeParms")
+    if isinstance(params, IndirectObject):
+        params = params.get_object()
+    if not isinstance(params, DictionaryObject) or not 10 <= params.get("/Predictor", 1) <= 15:
+        return None
+    space = obj.get("/ColorSpace")
+    channels = {"/DeviceRGB": 3, "/DeviceGray": 1}.get(space)
+    width, height = int(obj["/Width"]), int(obj["/Height"])
+    if (channels is None or obj.get("/BitsPerComponent") != 8
+            or params.get("/BitsPerComponent", 8) != 8
+            or params.get("/Columns", 1) != width or params.get("/Colors", 1) != channels):
+        return None
+    def chunk(kind, data):
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+    header = struct.pack(">IIBBBBB", width, height, 8, 2 if channels == 3 else 0, 0, 0, 0)
+    png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", obj._data) + chunk(b"IEND", b"")
+    image = Image.open(BytesIO(png))
+    image.load()
+    if "/SMask" in obj:
+        mask = _native_png_image(obj["/SMask"])
+        if mask is None or mask.mode != "L" or mask.size != image.size:
+            return None
+        image = image.convert("RGBA")
+        image.putalpha(mask)
+    return image
 
 
 def _compress_images(writer: PdfWriter, preset: Preset) -> tuple[int, int]:
@@ -85,20 +180,28 @@ def _compress_images(writer: PdfWriter, preset: Preset) -> tuple[int, int]:
             continue
         for key in keys:
             try:
-                image = page.images[key]
-                ref = image.indirect_reference
+                path = [key] if isinstance(key, str) else list(key)
+                if path[-1].startswith("~"):
+                    continue  # Inline images have no replaceable indirect object.
+                resource = page
+                for name in path:
+                    resource = resource["/Resources"]["/XObject"][name]
+                obj = resource
+                ref = obj.indirect_reference
                 if ref is None or ref.idnum in seen:
                     continue
                 seen.add(ref.idnum)
-                obj = ref.get_object()
-                original = image.image
-                if original.width * original.height < 100_000:
+                if int(obj.get("/Width", 0)) * int(obj.get("/Height", 0)) < 100_000:
                     continue
-                # Color-key masks and explicit masks need special treatment;
-                # leave them unchanged. Soft masks are supported below.
                 if "/Mask" in obj:
                     skipped += 1
                     continue
+                try:
+                    original = _native_png_image(obj)
+                except Exception:
+                    original = None
+                if original is None:
+                    original = page.images[key].image
                 rgb = original.convert("RGB")
                 rgb.thumbnail((preset.max_edge, preset.max_edge), Image.Resampling.LANCZOS)
                 encoded = BytesIO()

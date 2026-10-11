@@ -1,6 +1,6 @@
 # PDF 轻压缩 / PDFCompressor
 
-当前为 v0.1.0。压缩核心及三个 Finder 右键入口均已在 macOS 14.6 实际点击验证，详见 [验证记录](docs/VERIFICATION.md)。
+当前为 v0.1.0。压缩核心及三个 Finder 右键入口均已在 macOS 14.6 实际点击验证，详见 [验证记录](docs/VERIFICATION.md)。性能优化后，本机这份 48 页 PDF 三档分别约需 2 / 12 / 10 秒；具体取决于文件内容，见 [性能记录](docs/PERFORMANCE.md)。
 
 本地 PDF 三档压缩工具。选中 PDF 后，从 Finder 的 **快速操作** 中点击对应档位，在原文件夹生成副本。成功时不弹确认、不弹完成提示，不上传文件。
 
