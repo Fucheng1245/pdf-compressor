@@ -2,13 +2,28 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+@interface ProgressWindowDelegate : NSObject <NSWindowDelegate>
+@end
+@implementation ProgressWindowDelegate
+- (void)windowWillClose:(NSNotification *)notification {
+    // Closing the viewer never cancels its parent compression process.
+    [NSApp terminate:nil];
+}
+@end
+
 int main(void) {
     @autoreleasepool {
         NSApplication *app = [NSApplication sharedApplication];
         [app setActivationPolicy:NSApplicationActivationPolicyAccessory];
         NSPanel *panel = [[NSPanel alloc] initWithContentRect:NSMakeRect(0, 0, 380, 150)
-            styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+            styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
+                       NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable) backing:NSBackingStoreBuffered defer:NO];
         panel.title = @"PDF 压缩";
+        panel.contentMinSize = NSMakeSize(380, 150);
+        panel.contentMaxSize = NSMakeSize(600, 220);
+        panel.collectionBehavior = NSWindowCollectionBehaviorFullScreenNone;
+        __attribute__((objc_precise_lifetime)) ProgressWindowDelegate *delegate = [[ProgressWindowDelegate alloc] init];
+        panel.delegate = delegate;
         panel.level = NSFloatingWindowLevel;
         panel.releasedWhenClosed = NO;
         panel.hidesOnDeactivate = NO;
@@ -30,9 +45,13 @@ int main(void) {
         detail.font = [NSFont systemFontOfSize:11];
         detail.textColor = NSColor.secondaryLabelColor;
         detail.frame = NSMakeRect(24, 22, 332, 20);
-        for (NSView *view in @[heading, filename, bar, detail]) [panel.contentView addSubview:view];
+        for (NSView *view in @[heading, filename, bar, detail]) {
+            view.autoresizingMask = NSViewWidthSizable | NSViewMinYMargin;
+            [panel.contentView addSubview:view];
+        }
         [panel center];
-        [panel orderFrontRegardless];
+        [panel makeKeyAndOrderFront:nil];
+        [app activateIgnoringOtherApps:YES];
         // Stdin is owned by compression. EOF terminates this transient process,
         // including if its parent exits unexpectedly. No polling or daemon.
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
