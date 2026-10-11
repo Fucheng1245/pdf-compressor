@@ -1,0 +1,32 @@
+name: Bug / 兼容性问题
+description: 报告压缩、安装或 Finder 菜单问题
+title: "[Bug] "
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题描述
+      description: 预期结果、实际结果及复现步骤。
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: 环境
+      description: macOS 或其他系统版本、Python 版本，以及工具版本或提交号。
+    validations:
+      required: true
+  - type: dropdown
+    id: preset
+    attributes:
+      label: 相关档位
+      options:
+        - 画质优先 / high
+        - 均衡压缩 / mid
+        - 体积优先 / low
+        - 安装、菜单或其他问题
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 复现材料
+      description: 可提供匿名生成的最小样本或已去除个人路径的错误信息，请勿上传私人 PDF 或完整私人日志。
