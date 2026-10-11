@@ -5,7 +5,7 @@ import argparse
 from pathlib import Path
 import plistlib
 import shutil
-from install import PRESETS, PREFIX, refresh_services
+from install import PRESETS, PREFIX, refresh_services, configure_finder
 
 
 def main() -> None:
@@ -13,6 +13,7 @@ def main() -> None:
     parser.add_argument("--home", type=Path, default=Path.home())
     args = parser.parse_args()
     home = args.home.expanduser().absolute()
+    removed_labels = []
     for preset, label in PRESETS.items():
         bundle = home / "Library" / "Services" / f"PDF压缩 · {label}.workflow"
         if not bundle.exists():
@@ -22,6 +23,7 @@ def main() -> None:
                 info = plistlib.load(f)
             if info.get("PDFCompressorOwner", info.get("CFBundleIdentifier")) == PREFIX + preset:
                 shutil.rmtree(bundle)
+                removed_labels.append(label)
                 print(f"已删除：{bundle}")
         except (OSError, plistlib.InvalidFileException):
             print(f"保留无法确认归属的文件：{bundle}")
@@ -29,6 +31,7 @@ def main() -> None:
     if runtime.is_dir():
         shutil.rmtree(runtime)
     if home == Path.home():
+        configure_finder(False, removed_labels)
         refresh_services()
     print("卸载完成。PDF 原件、压缩副本及诊断日志均保留。")
 

@@ -91,6 +91,45 @@ def install_workflows(home: Path, python: Path) -> list[Path]:
     return outputs
 
 
+def finder_preferences(data: dict, enable: bool, labels=None) -> dict:
+    """Update only our entries, preserving native plist bool/int types.
+
+    SERVICE identifiers below were verified in Finder on macOS 14.6.
+    Never use defaults -dict-add with untyped values: it writes strings.
+    """
+    labels = list(PRESETS.values() if labels is None else labels)
+    active = data.setdefault("FinderActive", {})
+    ordering = data.setdefault("FinderOrdering", {})
+    status = data.setdefault("NSServicesStatus", {})
+    for label in labels:
+        name = "PDF压缩 · " + label
+        key = "SERVICE-(null) - " + name
+        service = "(null) - " + name + " - runWorkflowAsService"
+        # Remove the unused identifier variant left by early local debugging.
+        active.pop(key + " - runWorkflowAsService", None)
+        ordering.pop(key + " - runWorkflowAsService", None)
+        if enable:
+            active[key] = True
+            others = [v for k, v in ordering.items()
+                      if k != key and type(v) is int]
+            ordering[key] = ordering.get(key) if type(ordering.get(key)) is int else max(others, default=-1) + 1
+            modes = status.setdefault(service, {}).setdefault("presentation_modes", {})
+            modes.update({k: True for k in ("ContextMenu", "FinderPreview", "ServicesMenu", "TouchBar")})
+        else:
+            active.pop(key, None)
+            ordering.pop(key, None)
+            status.pop(service, None)
+    return data
+
+
+def configure_finder(enable: bool, labels=None) -> None:
+    result = subprocess.run(["defaults", "export", "pbs", "-"], check=True, capture_output=True)
+    data = finder_preferences(plistlib.loads(result.stdout), enable, labels)
+    for section in ("FinderActive", "FinderOrdering", "NSServicesStatus"):
+        subprocess.run(["defaults", "write", "pbs", section,
+                        plistlib.dumps(data[section]).decode("utf-8")], check=True)
+
+
 def refresh_services() -> None:
     tool = Path("/System/Library/CoreServices/pbs")
     if tool.exists():
@@ -119,9 +158,10 @@ def main() -> int:
         subprocess.run([uv, "pip", "install", "--python", str(python), str(REPO)], check=True)
     for output in install_workflows(home, python.absolute()):
         print(output)
-    if home == Path.home():
+    if home == Path.home() and sys.platform == "darwin":
+        configure_finder(True)
         refresh_services()
-    print("已生成三档快速操作。入口未出现时请在系统设置中启用 Finder 快速操作。")
+    print("已安装并启用三档快速操作。入口未出现时请重新打开 Finder 窗口。")
     return 0
 
 

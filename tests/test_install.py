@@ -52,3 +52,25 @@ def test_update_and_uninstall_preserve_other_workflows(tmp_path):
     assert result.returncode == 0, result.stderr
     assert other.exists()
     assert not any(bundle.exists() for bundle in bundles)
+
+
+def test_finder_preferences_preserve_types_and_other_services():
+    original = {"FinderActive": {"other": True}, "FinderOrdering": {"other": 5},
+                "NSServicesStatus": {"other": {"presentation_modes": {"ContextMenu": False}}}}
+    data = installer.finder_preferences(plistlib.loads(plistlib.dumps(original)), True)
+    data = plistlib.loads(plistlib.dumps(data))
+    for label in installer.PRESETS.values():
+        key = 'SERVICE-(null) - PDF压缩 · ' + label
+        assert data['FinderActive'][key] is True
+        assert type(data['FinderOrdering'][key]) is int
+    assert installer.finder_preferences(data, False) == original
+
+
+def test_finder_preferences_repair_legacy_strings():
+    key = 'SERVICE-(null) - PDF压缩 · 画质优先'
+    data = {'FinderActive': {key: '1', key + ' - runWorkflowAsService': '1'},
+            'FinderOrdering': {key: '6', key + ' - runWorkflowAsService': '6'}}
+    fixed = installer.finder_preferences(data, True)
+    assert fixed['FinderActive'][key] is True
+    assert type(fixed['FinderOrdering'][key]) is int
+    assert key + ' - runWorkflowAsService' not in fixed['FinderActive']
