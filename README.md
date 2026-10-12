@@ -1,6 +1,55 @@
-# PDF 轻压缩 / PDFCompressor
+<div align="center">
 
-本地 PDF 三档压缩工具。选中 PDF 后，从 Finder 的 **快速操作** 中点击对应档位，在原文件夹生成副本。处理时显示简洁进度窗，完成后自动关闭，不弹完成提示，不上传文件。
+# PDF 轻压缩
+
+**把 PDF 压缩放进右键菜单。**
+
+给 macOS 的本地 PDF 压缩小工具。选一档，原位置另存，继续做你的事。
+
+[![Tests](https://github.com/Fucheng1245/pdf-compressor/actions/workflows/tests.yml/badge.svg)](https://github.com/Fucheng1245/pdf-compressor/actions/workflows/tests.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![macOS](https://img.shields.io/badge/Finder-macOS_13%2B-555.svg)](#macos-安装)
+
+[开始安装](#macos-安装) · [看实测效果](#一份-48-页-pdf-的实测效果) · [贡献代码](CONTRIBUTING.md)
+
+![安装后：从 Finder 快速操作选择三档压缩，原生进度窗显示处理状态，副本保存在原位置](docs/images/product-overview.svg)
+
+</div>
+
+## 安装之后，用起来就是这样
+
+1. 在 Finder 中选中一个或多个 PDF，右键打开 **快速操作**。
+2. 点击 **画质优先 / 均衡压缩 / 体积优先**，立即开始。
+3. 进度窗自动关闭，副本直接出现在原文件夹，原件保留。
+
+上图为安装后操作示意，展示实际入口名称、进度窗信息和输出命名；系统外观随 macOS 版本及设置变化。
+
+## 为什么用它
+
+| 你关心的事 | 它的做法 |
+| --- | --- |
+| 少一步操作 | 直接在文件的右键菜单中压缩，无需打开应用或拖入文件 |
+| 文件隐私 | 压缩在本机完成，不上传、无遥测，无需账户 |
+| 阅读体验 | 保留可提取文字与矢量图，较大图片按档位压缩 |
+| 保留原件 | 同目录生成副本，重名自动编号；变大则保存原件的等大小副本 |
+| 不打断工作 | 处理时显示进度，完成后自动关闭，无成功弹窗、无后台常驻 |
+| 多份文件 | 支持多选与顺序处理；同时发起的任务自动排队 |
+
+## 一份 48 页 PDF 的实测效果
+
+原文件 **87.1 MiB**。同一份 PDF，本机测试结果如下：
+
+| 档位 | 压缩后 | 体积降低约 | 核心处理耗时约 |
+| --- | ---: | ---: | ---: |
+| 画质优先 | 59.2 MiB | 32% | 2 秒 |
+| 均衡压缩 | 10.9 MiB | 88% | 8 秒 |
+| 体积优先 | 7.6 MiB | 91% | 7 秒 |
+
+这是一个样本，结果取决于图片、编辑数据和文件结构；耗时不含 Finder 启动与排队。三档文字提取与原件逐字一致；画质优先在该样本的渲染检查中与原件一致。均衡与体积优先对图片有损压缩。详细方法见 [验证记录](docs/VERIFICATION.md) 和 [性能对照](docs/OPTIMIZATION.md)。MiB 按 1024² 字节计算。
+
+## 选哪一档
+
+日常分享先选 **均衡压缩**；对图像细节敏感时选 **画质优先**；文件体积受限时试 **体积优先**。
 
 | 快速操作 | 输出示例 | 策略 |
 | --- | --- | --- |
@@ -12,9 +61,11 @@ high / mid / low 表示保留的画质，不表示压缩力度。JPEG 参数不�
 
 ## macOS 安装
 
-需要 macOS 13+ 和 Apple Command Line Tools（用于安装时编译原生进度窗，运行时无需编译器）；本地实际验证环境为 macOS 14.6。先安装 [uv](https://docs.astral.sh/uv/getting-started/installation/)；如果尚未安装 Apple Command Line Tools，执行 `xcode-select --install`。从 GitHub 下载源码或克隆仓库，进入仓库根目录后执行：
+需要 macOS 13+ 和 Apple Command Line Tools（用于安装时编译原生进度窗，运行时无需编译器）；本地实际验证环境为 macOS 14.6。先安装 [uv](https://docs.astral.sh/uv/getting-started/installation/)；如果尚未安装 Apple Command Line Tools，执行 `xcode-select --install`。从 GitHub 克隆仓库后执行：
 
 ```bash
+git clone https://github.com/Fucheng1245/pdf-compressor.git
+cd pdf-compressor
 uv run --python 3.12 --no-project python scripts/install.py
 ```
 
@@ -83,6 +134,6 @@ API 可传入 `progress(stage, completed, total)` 回调；仅 `images` 阶段�
 
 ## 开源与发布
 
-这是独立仓库，不包含论文或个人 PDF、日志、运行环境和生成的输出。将仓库推送到自己的 GitHub remote 即可，安装器会从用户检出的本地代码构建安装包。当前不提供签名 DMG、自动更新或 Finder 扩展。
+这是独立仓库，不包含论文或个人 PDF、日志、运行环境和生成的输出。安装器从检出的本地代码构建安装包。当前不提供签名 DMG、自动更新或 Finder 扩展。
 
 许可证：[MIT](LICENSE)。版本记录见 [CHANGELOG](CHANGELOG.md)，参与开发见 [贡献指南](CONTRIBUTING.md)。

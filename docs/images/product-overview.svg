@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="860" viewBox="0 0 1440 860">
+<defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#eff4ff"/><stop offset="1" stop-color="#f5f2fa"/></linearGradient><filter id="shadow" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow dy="12" stdDeviation="18" flood-color="#243860" flood-opacity=".12"/></filter></defs>
+<rect width="1440" height="860" rx="32" fill="url(#bg)"/>
+<g font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif">
+<rect x="64" y="54" width="54" height="54" rx="15" fill="#285bed"/><path d="M81 67h16l9 9v20H81z" fill="white"/><path d="M97 67v10h9" fill="none" stroke="#bfd0ff" stroke-width="2"/><text x="134" y="91" font-size="28" font-weight="700" fill="#18243b">PDF 轻压缩</text><text x="1230" y="87" font-size="18" fill="#69748c">macOS · 开源</text>
+<text x="64" y="184" font-size="54" font-weight="700" fill="#14223c">把 PDF 压缩放进右键菜单。</text>
+<text x="67" y="231" font-size="23" fill="#64718a">选择一档，原位置另存。文件留在本机，工作少一步。</text>
+<g filter="url(#shadow)"><rect x="64" y="286" width="814" height="368" rx="18" fill="#fff"/><rect x="914" y="286" width="462" height="368" rx="18" fill="#fff"/></g>
+<text x="88" y="322" font-size="18" fill="#65728a">01  右键 PDF → 快速操作</text>
+<rect x="91" y="348" width="238" height="272" rx="12" fill="#f5f6fa"/><text x="112" y="385" font-size="20" fill="#26344e">打开</text><text x="112" y="427" font-size="20" fill="#26344e">显示简介</text><text x="112" y="469" font-size="20" fill="#26344e">重新命名</text><path d="M107 487h203" stroke="#dce1eb"/><rect x="102" y="501" width="216" height="43" rx="7" fill="#285bed"/><text x="114" y="530" font-size="20" fill="white">快速操作</text><text x="293" y="530" font-size="20" fill="white">›</text><text x="112" y="586" font-size="20" fill="#26344e">拷贝</text>
+<rect x="343" y="482" width="506" height="138" rx="12" fill="#f5f6fa" stroke="#e6eaf2"/>
+<text x="365" y="516" font-size="21" fill="#24344f">PDF压缩 · 画质优先</text><rect x="352" y="529" width="488" height="40" rx="6" fill="#285bed"/><text x="365" y="556" font-size="21" fill="white">PDF压缩 · 均衡压缩</text><text x="365" y="601" font-size="21" fill="#24344f">PDF压缩 · 体积优先</text>
+<text x="940" y="322" font-size="18" fill="#65728a">02  看进度，等副本出现</text>
+<rect x="940" y="350" width="410" height="192" rx="12" fill="#f7f7f8" stroke="#e2e5eb"/><path d="M940 387h410" stroke="#e2e5eb"/><circle cx="958" cy="369" r="6" fill="#ff6058"/><circle cx="979" cy="369" r="6" fill="#febc2e"/><circle cx="1000" cy="369" r="6" fill="#29c840"/><text x="1120" y="375" font-size="15" fill="#586274">PDF 压缩</text>
+<text x="961" y="422" font-size="20" font-weight="700" fill="#24344f">均衡压缩</text><text x="961" y="449" font-size="16" fill="#6a7589">main.pdf</text><rect x="961" y="469" width="367" height="6" rx="3" fill="#dce1eb"/><rect x="961" y="469" width="188" height="6" rx="3" fill="#285bed"/><text x="961" y="507" font-size="15" fill="#6a7589">正在处理图片 · 24 / 48 页</text>
+<rect x="941" y="565" width="408" height="53" rx="9" fill="#eff7f2"/><text x="962" y="599" font-size="19" fill="#2c6750">副本：main_mid.pdf　原件保留</text>
+<g fill="#14223c" font-weight="700" font-size="25"><text x="69" y="717">三档选择</text><text x="426" y="717">本地处理</text><text x="783" y="717">安静完成</text><text x="1140" y="717">批量处理</text></g>
+<g fill="#64718a" font-size="19"><text x="69" y="751">画质 / 均衡 / 体积</text><text x="426" y="751">不上传，无遥测</text><text x="783" y="751">进度窗自动关闭</text><text x="1140" y="751">多选后顺序压缩</text></g>
+<text x="69" y="813" font-size="15" fill="#8a93a6">安装后操作示意 · 菜单样式随 macOS 版本与外观变化 · 压缩完成后不弹成功提示</text>
+</g></svg>
